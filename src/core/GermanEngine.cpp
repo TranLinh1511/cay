@@ -86,57 +86,18 @@ void GermanEngine::OnKeyDown(Cay::KeyEvent& e) {
 
     if (e.keyCode == Cay::KeyCode::Backspace) {
         if (_len > 0) {
-            // Tinh output hien tai truoc khi xoa
-            wchar_t outBefore[MAX_BUFFER]; int lenBefore = 0;
-            BuildOutput(outBefore, lenBefore);
+            // Xoa toan bo cum ky tu giong nhau lien ke o cuoi buffer
+            // Vi du: buffer "aoo" -> xoa cum 'o' -> con "a"
+            //        buffer "oo"  -> xoa cum 'o' -> rong
+            //        buffer "sss" -> xoa cum 's' -> rong
+            wchar_t last = _buf[_len - 1];
+            while (_len > 0 && _buf[_len - 1] == last) {
+                _len--;
+                _buf[_len] = L'\0';
+            }
 
-            // Xoa 1 ky tu khoi buffer raw
-            _len--;
-            _buf[_len] = L'\0';
-
-            // Tinh output sau khi xoa
             wchar_t outAfter[MAX_BUFFER]; int lenAfter = 0;
             BuildOutput(outAfter, lenAfter);
-
-            // Truong hop 1: output khong doi sau khi xoa 1 raw
-            // (vi du: ää -> xoa 1 'a' -> output van la ä)
-            // -> xoa het cum raw con lai cung loai
-            bool sameOutput = (lenBefore == lenAfter);
-            for (int k = 0; k < lenBefore && sameOutput; k++)
-                if (outBefore[k] != outAfter[k]) { sameOutput = false; }
-
-            if (sameOutput && _len > 0) {
-                wchar_t last = _buf[_len - 1];
-                while (_len > 0 && _buf[_len - 1] == last) {
-                    _len--;
-                    _buf[_len] = L'\0';
-                }
-                BuildOutput(outAfter, lenAfter);
-            }
-            // Truong hop 2: output thay doi nhung ky tu cuoi dang la raw char "lo"
-            // (vi du: oo -> xoa 1 -> con 'o', output = 'o' thay vi 'ö')
-            // -> xoa luon ca cum raw do, khong de lai raw char lua
-            else if (_len > 0 && lenAfter > 0) {
-                wchar_t last = _buf[_len - 1];
-                wchar_t sp; int trig;
-                GetRule(last, sp, trig);
-
-                if (sp != 0 && outAfter[lenAfter - 1] == last) {
-                    // Dem so raw char 'last' lien tiep o cuoi buffer
-                    int runLen = 0;
-                    for (int k = _len - 1; k >= 0 && _buf[k] == last; k--) runLen++;
-
-                    // Neu so raw < trig: dang "le", xoa het cum nay
-                    if (runLen > 0 && runLen % trig != 0) {
-                        while (_len > 0 && _buf[_len - 1] == last) {
-                            _len--;
-                            _buf[_len] = L'\0';
-                        }
-                        BuildOutput(outAfter, lenAfter);
-                    }
-                }
-            }
-
             Inject(outAfter, lenAfter);
             e.handled = true;
         }
