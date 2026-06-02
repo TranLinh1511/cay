@@ -2,6 +2,33 @@
 
 namespace Cay {
 
+// Dead key acute: ' + vowel -> accented char
+// ' + e -> é, ' + E -> É
+// ' + a -> á, ' + A -> Á
+// ' + i -> í, ' + I -> Í
+// ' + o -> ó, ' + O -> Ó
+// ' + u -> ú, ' + U -> Ú
+// ' + y -> ý, ' + Y -> Ý
+// ' + ' -> ' (thoat, emit literal)
+// ' + khac -> emit ' roi xu ly ky tu do binh thuong
+static wchar_t GetAcute(wchar_t ch) {
+    switch (ch) {
+        case L'e': return L'\u00E9'; // é
+        case L'E': return L'\u00C9'; // É
+        case L'a': return L'\u00E1'; // á
+        case L'A': return L'\u00C1'; // Á
+        case L'i': return L'\u00ED'; // í
+        case L'I': return L'\u00CD'; // Í
+        case L'o': return L'\u00F3'; // ó
+        case L'O': return L'\u00D3'; // Ó
+        case L'u': return L'\u00FA'; // ú
+        case L'U': return L'\u00DA'; // Ú
+        case L'y': return L'\u00FD'; // ý
+        case L'Y': return L'\u00DD'; // Ý
+        default:   return 0;
+    }
+}
+
 // Tra ve (special_char, trigger_count) cho tung ky tu
 // trigger=2: aa->ä, uu->ü, oo->ö
 // trigger=3: sss->ß
@@ -77,6 +104,7 @@ void GermanEngine::ResetState() {
     _buf[0] = L'\0';
     _lastOutputLen = 0;
     _lastOutput[0] = L'\0';
+    _pendingAcute = false;
 }
 
 void GermanEngine::ResetFull() { ResetState(); }
@@ -85,6 +113,12 @@ void GermanEngine::OnKeyDown(Cay::KeyEvent& e) {
     wchar_t ch = e.character;
 
     if (e.keyCode == Cay::KeyCode::Backspace) {
+        // Neu dang cho vowel sau dead key ', huy dead key
+        if (_pendingAcute) {
+            _pendingAcute = false;
+            e.handled = true;
+            return;
+        }
         if (_len > 0) {
             // Xoa toan bo cum ky tu giong nhau lien ke o cuoi buffer
             // Vi du: buffer "aoo" -> xoa cum 'o' -> con "a"
@@ -110,10 +144,66 @@ void GermanEngine::OnKeyDown(Cay::KeyEvent& e) {
         e.keyCode == Cay::KeyCode::Up     || e.keyCode == Cay::KeyCode::Down   ||
         e.keyCode == Cay::KeyCode::Home   || e.keyCode == Cay::KeyCode::End    ||
         e.keyCode == Cay::KeyCode::Delete) {
+        _pendingAcute = false;
         ResetState();
         return;
     }
 
+    // --- Xu ly dead key acute ---
+
+    // Dang cho vowel sau '
+    if (_pendingAcute) {
+        _pendingAcute = false;
+
+        if (ch == L'\'') {
+            // '' -> emit literal '
+            // Flush buffer truoc, reset, emit ' rieng
+            wchar_t out[MAX_BUFFER]; int outLen = 0;
+            BuildOutput(out, outLen);
+            if (outLen > 0) Inject(out, outLen);
+            ResetState();
+            wchar_t lit[2] = { L'\'', L'\0' };
+            OnInjectText(0, lit, 1);
+            e.handled = true;
+            return;
+        }
+
+        wchar_t accented = GetAcute(ch);
+        if (accented != 0) {
+            // Flush buffer truoc (German umlaut neu co), emit accented char rieng
+            wchar_t out[MAX_BUFFER]; int outLen = 0;
+            BuildOutput(out, outLen);
+            if (outLen > 0) Inject(out, outLen);
+            ResetState();
+            wchar_t ac[2] = { accented, L'\0' };
+            OnInjectText(0, ac, 1);
+            e.handled = true;
+            return;
+        }
+
+        // ' + ky tu khong hop le -> emit literal ' truoc, roi xu ly ky tu nhu binh thuong
+        wchar_t out[MAX_BUFFER]; int outLen = 0;
+        BuildOutput(out, outLen);
+        if (outLen > 0) Inject(out, outLen);
+        ResetState();
+        wchar_t lit[2] = { L'\'', L'\0' };
+        OnInjectText(0, lit, 1);
+        // Fall through: tiep tuc xu ly ch binh thuong bên dưới
+    }
+
+    // Bat dau dead key khi gap dau '
+    if (ch == L'\'') {
+        // Flush buffer German hien tai (neu co), giu trang thai cho vowel
+        wchar_t out[MAX_BUFFER]; int outLen = 0;
+        BuildOutput(out, outLen);
+        if (outLen > 0) Inject(out, outLen);
+        ResetState();
+        _pendingAcute = true;
+        e.handled = true;
+        return;
+    }
+
+    // --- Xu ly binh thuong (umlaut / ß) ---
     bool isAlpha = (ch >= L'a' && ch <= L'z') || (ch >= L'A' && ch <= L'Z');
     if (!isAlpha || ch == 0) { ResetState(); return; }
 
