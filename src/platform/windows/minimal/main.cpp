@@ -1,4 +1,3 @@
-
 #include <windows.h>
 #include <shellapi.h>
 #include <winreg.h>
@@ -27,7 +26,7 @@
 #define IDM_EXIT 1004
 
 // Che do: 0=Tat, 1=Tieng Viet, 2=Tieng Duc
-enum InputMode { MODE_OFF = 0, MODE_VIET = 1, MODE_DE = 2 };
+enum InputMode { MODE_VIET = 0, MODE_DE = 1 };
 
 HWND g_hWnd = nullptr;
 NOTIFYICONDATAW g_nid = { 0 };
@@ -35,8 +34,7 @@ Cay::TelexEngine g_engine;
 Cay::GermanEngine g_deEngine;
 CayIME::InputHookManager* g_hookManager = nullptr;
 
-InputMode g_mode = MODE_VIET;
-HICON g_iconOff = nullptr;   // Xam - Tat
+InputMode g_mode = MODE_VIET; // Mac dinh: Tieng Viet
 HICON g_iconViet = nullptr;  // Do  - Tieng Viet
 HICON g_iconDe = nullptr;    // Vang - Tieng Duc
 bool g_pendingToggle = false;
@@ -115,7 +113,6 @@ void ToggleAutoStart() {
 
 void UpdateTrayIcon(bool isAdd = false) {
     switch (g_mode) {
-        case MODE_OFF:  g_nid.hIcon = g_iconOff;  lstrcpyW(g_nid.szTip, L"Cay - T\u1eaft (Ctrl+Shift \u0111\u1ec3 chuy\u1ec3n)"); break;
         case MODE_VIET: g_nid.hIcon = g_iconViet; lstrcpyW(g_nid.szTip, L"Cay - Ti\u1ebfng Vi\u1ec7t (Ctrl+Shift \u0111\u1ec3 chuy\u1ec3n)"); break;
         case MODE_DE:   g_nid.hIcon = g_iconDe;   lstrcpyW(g_nid.szTip, L"Cay - Ti\u1ebfng \u0110\u1ee9c (Ctrl+Shift \u0111\u1ec3 chuy\u1ec3n)"); break;
     }
@@ -127,9 +124,8 @@ void Toggle() {
     g_engine.ResetFull();
     g_deEngine.ResetFull();
     switch (g_mode) {
-        case MODE_OFF:  g_mode = MODE_VIET; break;
         case MODE_VIET: g_mode = MODE_DE;   break;
-        case MODE_DE:   g_mode = MODE_OFF;  break;
+        case MODE_DE:   g_mode = MODE_VIET; break;
     }
     UpdateTrayIcon();
     MessageBeep(MB_OK);
@@ -226,8 +222,6 @@ void OnKeyDownHook(CayIME::InputHookManager* sender, CayIME::HookKeyEventArgs& e
         return;
     }
 
-    if (g_mode == MODE_OFF) return;
-
     Cay::KeyEvent ce;
     ce.keyCode = MapVKToKeyCode(e.keyCode);
     ce.character = e.character;
@@ -254,7 +248,6 @@ void OnKeyUpHook(CayIME::InputHookManager* sender, CayIME::HookKeyEventArgs& e) 
         g_pendingToggle = false; Toggle(); return;
     }
 
-    if (g_mode == MODE_OFF) return;
     Cay::KeyEvent ce;
     ce.keyCode = MapVKToKeyCode(e.keyCode);
     ce.character = e.character;
@@ -290,7 +283,6 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
     // Khởi tạo data (Đã xóa vì data là static)
     g_iconViet = CreateTrayIcon(RGB(220, 30, 30),  L"V"); // Do - Viet
     g_iconDe   = CreateTrayIcon(RGB(200, 160, 0),  L"D"); // Vang - Duc
-    g_iconOff  = CreateTrayIcon(RGB(110, 110, 110), L"-"); // Xam - Tat
 
     // Register Message-Only Window Class
     WNDCLASSEXW wcex = { 0 };
@@ -347,10 +339,8 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
     DestroyWindow(g_hWnd);
     DestroyIcon(g_iconViet);
     DestroyIcon(g_iconDe);
-    DestroyIcon(g_iconOff);
     ReleaseMutex(hMutex);
     CloseHandle(hMutex);
 
     return (int)msg.wParam;
 }
-
