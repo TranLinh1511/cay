@@ -120,12 +120,21 @@ void GermanEngine::OnKeyDown(Cay::KeyEvent& e) {
             return;
         }
         if (_len > 0) {
-            // Xoa toan bo cum ky tu giong nhau lien ke o cuoi buffer
-            // Vi du: buffer "aoo" -> xoa cum 'o' -> con "a"
-            //        buffer "oo"  -> xoa cum 'o' -> rong
-            //        buffer "sss" -> xoa cum 's' -> rong
             wchar_t last = _buf[_len - 1];
-            while (_len > 0 && _buf[_len - 1] == last) {
+            wchar_t sp; int trig;
+            GetRule(last, sp, trig);
+
+            if (sp != 0) {
+                // Ky tu co rule umlaut/ß -> xoa toan bo cum giong nhau lien ke
+                // Vi du: buffer "aoo" -> xoa cum 'o' -> con "a"
+                //        buffer "oo"  -> xoa cum 'o' -> rong
+                //        buffer "sss" -> xoa cum 's' -> rong
+                while (_len > 0 && _buf[_len - 1] == last) {
+                    _len--;
+                    _buf[_len] = L'\0';
+                }
+            } else {
+                // Ky tu thuong -> xoa 1 ky tu binh thuong
                 _len--;
                 _buf[_len] = L'\0';
             }
