@@ -2,45 +2,52 @@
 
 namespace Cay {
 
-wchar_t GermanEngine::GetUmlaut(wchar_t ch) {
+// Tra ve (special_char, trigger_count) cho tung ky tu
+// trigger=2: aa->ä, uu->ü, oo->ö
+// trigger=3: sss->ß
+static void GetRule(wchar_t ch, wchar_t& special, int& trig) {
     switch (ch) {
-        case L'a': return L'\u00E4';
-        case L'A': return L'\u00C4';
-        case L'u': return L'\u00FC';
-        case L'U': return L'\u00DC';
-        case L'o': return L'\u00F6';
-        case L'O': return L'\u00D6';
-        case L's': return L'\u00DF';
-        case L'S': return L'\u00DF';
-        default:   return 0;
+        case L'a': special = L'\u00E4'; trig = 2; return;
+        case L'A': special = L'\u00C4'; trig = 2; return;
+        case L'u': special = L'\u00FC'; trig = 2; return;
+        case L'U': special = L'\u00DC'; trig = 2; return;
+        case L'o': special = L'\u00F6'; trig = 2; return;
+        case L'O': special = L'\u00D6'; trig = 2; return;
+        case L's': special = L'\u00DF'; trig = 3; return;
+        case L'S': special = L'\u00DF'; trig = 3; return;
+        default:   special = 0;         trig = 0; return;
     }
 }
 
-// Quy tac:
-//   run=1        -> giu nguyen  (a   -> a)
-//   run=2 (chan) -> umlaut      (aa  -> ä)
-//   run=3 (le)  -> bo 1, giu 2 (aaa -> aa)
-//   run=4 (chan) -> 2 umlaut    (aaaa-> ää)
-//   run le >= 3  -> giu run-1 goc (bo 1 chu)
+// Quy tac chung (ap dung cho ca umlaut va ß):
+//   run < trig          -> giu nguyen
+//   run chia het trig   -> run/trig ky tu dac biet
+//   run le (mod != 0)   -> bo 1, giu run-1 ky tu goc
+//
+// Vi du umlaut (trig=2): a->a, aa->ä, aaa->aa, aaaa->ää
+// Vi du ß     (trig=3): s->s, ss->ss, sss->ß, ssss->sss, ssssss->ßß
 void GermanEngine::BuildOutput(wchar_t* out, int& outLen) const {
     outLen = 0;
     int i = 0;
     while (i < _len) {
         wchar_t ch = _buf[i];
-        wchar_t uml = GetUmlaut(ch);
         int run = 1;
         while (i + run < _len && _buf[i + run] == ch) run++;
         i += run;
 
-        if (!uml || run == 1) {
+        wchar_t sp; int trig;
+        GetRule(ch, sp, trig);
+
+        if (!sp || run < trig) {
             for (int r = 0; r < run && outLen < MAX_BUFFER - 1; r++)
                 out[outLen++] = ch;
-        } else if (run % 2 == 0) {
-            for (int r = 0; r < run/2 && outLen < MAX_BUFFER - 1; r++)
-                out[outLen++] = uml;
+        } else if (run % trig == 0) {
+            int count = run / trig;
+            for (int r = 0; r < count && outLen < MAX_BUFFER - 1; r++)
+                out[outLen++] = sp;
         } else {
-            // le >= 3: giu run-1 goc
-            for (int r = 0; r < run-1 && outLen < MAX_BUFFER - 1; r++)
+            // Le: bo 1, giu run-1 ky tu goc
+            for (int r = 0; r < run - 1 && outLen < MAX_BUFFER - 1; r++)
                 out[outLen++] = ch;
         }
     }
@@ -79,12 +86,35 @@ void GermanEngine::OnKeyDown(Cay::KeyEvent& e) {
 
     if (e.keyCode == Cay::KeyCode::Backspace) {
         if (_len > 0) {
+            // Tinh output hien tai truoc khi xoa
+            wchar_t outBefore[MAX_BUFFER]; int lenBefore = 0;
+            BuildOutput(outBefore, lenBefore);
+
+            // Xoa 1 ky tu khoi buffer raw
             _len--;
             _buf[_len] = L'\0';
-            wchar_t out[MAX_BUFFER];
-            int outLen = 0;
-            BuildOutput(out, outLen);
-            Inject(out, outLen);
+
+            // Tinh output sau khi xoa
+            wchar_t outAfter[MAX_BUFFER]; int lenAfter = 0;
+            BuildOutput(outAfter, lenAfter);
+
+            // Neu output truoc = output sau (bo 1 raw nhung output khong doi)
+            // -> tiep tuc xoa them (umlaut hien thi = 1 ky tu, can xoa het cum raw)
+            bool sameOutput = (lenBefore == lenAfter);
+            for (int k = 0; k < lenBefore && sameOutput; k++)
+                if (outBefore[k] != outAfter[k]) { sameOutput = false; }
+
+            if (sameOutput && _len > 0) {
+                // Xoa het phan raw con lai cua cum hien tai
+                wchar_t last = _buf[_len - 1];
+                while (_len > 0 && _buf[_len - 1] == last) {
+                    _len--;
+                    _buf[_len] = L'\0';
+                }
+                BuildOutput(outAfter, lenAfter);
+            }
+
+            Inject(outAfter, lenAfter);
             e.handled = true;
         }
         return;
@@ -108,8 +138,7 @@ void GermanEngine::OnKeyDown(Cay::KeyEvent& e) {
         _buf[_len] = L'\0';
     }
 
-    wchar_t out[MAX_BUFFER];
-    int outLen = 0;
+    wchar_t out[MAX_BUFFER]; int outLen = 0;
     BuildOutput(out, outLen);
     Inject(out, outLen);
     e.handled = true;
