@@ -16,6 +16,7 @@ endif()
 set(CORE_SOURCES
     src/core/CayData.cpp
     src/core/CayEngine.cpp
+    src/core/GermanEngine.cpp
 )
 
 # ---------------------------------------------------------------------------
