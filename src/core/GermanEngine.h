@@ -16,7 +16,7 @@ private:
     int     _len;
     wchar_t _lastOutput[MAX_BUFFER];
     int     _lastOutputLen;
-
+    bool _pendingAcute;
     void Inject(const wchar_t* newText, int newLen);
     void ResetState();
     static wchar_t GetUmlaut(wchar_t ch);
