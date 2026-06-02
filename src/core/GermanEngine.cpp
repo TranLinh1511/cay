@@ -16,6 +16,12 @@ wchar_t GermanEngine::GetUmlaut(wchar_t ch) {
     }
 }
 
+// Quy tac:
+//   run=1        -> giu nguyen  (a   -> a)
+//   run=2 (chan) -> umlaut      (aa  -> ä)
+//   run=3 (le)  -> bo 1, giu 2 (aaa -> aa)
+//   run=4 (chan) -> 2 umlaut    (aaaa-> ää)
+//   run le >= 3  -> giu run-1 goc (bo 1 chu)
 void GermanEngine::BuildOutput(wchar_t* out, int& outLen) const {
     outLen = 0;
     int i = 0;
@@ -26,15 +32,15 @@ void GermanEngine::BuildOutput(wchar_t* out, int& outLen) const {
         while (i + run < _len && _buf[i + run] == ch) run++;
         i += run;
 
-        if (uml == 0) {
+        if (!uml || run == 1) {
             for (int r = 0; r < run && outLen < MAX_BUFFER - 1; r++)
                 out[outLen++] = ch;
-        } else {
-            int pairs = run / 2;
-            int rem   = run % 2;
-            for (int r = 0; r < pairs && outLen < MAX_BUFFER - 1; r++)
+        } else if (run % 2 == 0) {
+            for (int r = 0; r < run/2 && outLen < MAX_BUFFER - 1; r++)
                 out[outLen++] = uml;
-            if (rem && outLen < MAX_BUFFER - 1)
+        } else {
+            // le >= 3: giu run-1 goc
+            for (int r = 0; r < run-1 && outLen < MAX_BUFFER - 1; r++)
                 out[outLen++] = ch;
         }
     }
@@ -53,7 +59,7 @@ void GermanEngine::Inject(const wchar_t* newText, int newLen) {
     if (bs == 0 && suffixLen == 0) return;
     OnInjectText(bs, suffix, suffixLen);
     _lastOutputLen = newLen;
-    for (int i = 0; i < newLen; i++) _lastOutput[i] = newText[i];
+    for (int k = 0; k < newLen; k++) _lastOutput[k] = newText[k];
     _lastOutput[newLen] = L'\0';
 }
 
