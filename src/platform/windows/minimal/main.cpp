@@ -4,6 +4,7 @@
 #include <winreg.h>
 #include "CayData.h"
 #include "CayEngine.h"
+#include "GermanEngine.h"
 #include "KeyboardHookManager.h"
 #include "InputInjector.h"
 
@@ -25,17 +26,22 @@
 #define IDM_ABOUT 1003
 #define IDM_EXIT 1004
 
+// Che do: 0=Tat, 1=Tieng Viet, 2=Tieng Duc
+enum InputMode { MODE_OFF = 0, MODE_VIET = 1, MODE_DE = 2 };
+
 HWND g_hWnd = nullptr;
 NOTIFYICONDATAW g_nid = { 0 };
 Cay::TelexEngine g_engine;
+Cay::GermanEngine g_deEngine;
 CayIME::InputHookManager* g_hookManager = nullptr;
 
-bool g_enabled = true;
-HICON g_iconOn = nullptr;
-HICON g_iconOff = nullptr;
+InputMode g_mode = MODE_VIET;
+HICON g_iconOff = nullptr;   // Xam - Tat
+HICON g_iconViet = nullptr;  // Do  - Tieng Viet
+HICON g_iconDe = nullptr;    // Vang - Tieng Duc
 bool g_pendingToggle = false;
 
-HICON CreateTrayIcon(COLORREF color) {
+HICON CreateTrayIcon(COLORREF color, const wchar_t* label = L"V") {
     int width = GetSystemMetrics(SM_CXSMICON);
     int height = GetSystemMetrics(SM_CYSMICON);
     
@@ -54,7 +60,7 @@ HICON CreateTrayIcon(COLORREF color) {
     SetBkMode(hMemDC, TRANSPARENT);
     HFONT hFont = CreateFontW(-MulDiv(10, GetDeviceCaps(hdc, LOGPIXELSY), 72), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, VARIABLE_PITCH, L"Arial");
     HFONT hOldFont = (HFONT)SelectObject(hMemDC, hFont);
-    DrawTextW(hMemDC, L"V", -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    DrawTextW(hMemDC, label, -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     
     SelectObject(hMemDC, hOldFont);
     DeleteObject(hFont);
@@ -108,15 +114,24 @@ void ToggleAutoStart() {
 }
 
 void UpdateTrayIcon(bool isAdd = false) {
-    g_nid.hIcon = g_enabled ? g_iconOn : g_iconOff;
-    lstrcpyW(g_nid.szTip, g_enabled ? L"Cay - B\u1eadt (Ctrl+Shift \u0111\u1ec3 t\u1eaft)" : L"Cay - T\u1eaft (Ctrl+Shift \u0111\u1ec3 b\u1eadt)");
+    switch (g_mode) {
+        case MODE_OFF:  g_nid.hIcon = g_iconOff;  lstrcpyW(g_nid.szTip, L"Cay - T\u1eaft (Ctrl+Shift \u0111\u1ec3 chuy\u1ec3n)"); break;
+        case MODE_VIET: g_nid.hIcon = g_iconViet; lstrcpyW(g_nid.szTip, L"Cay - Ti\u1ebfng Vi\u1ec7t (Ctrl+Shift \u0111\u1ec3 chuy\u1ec3n)"); break;
+        case MODE_DE:   g_nid.hIcon = g_iconDe;   lstrcpyW(g_nid.szTip, L"Cay - Ti\u1ebfng \u0110\u1ee9c (Ctrl+Shift \u0111\u1ec3 chuy\u1ec3n)"); break;
+    }
     Shell_NotifyIconW(isAdd ? NIM_ADD : NIM_MODIFY, &g_nid);
 }
 
 void Toggle() {
-    g_enabled = !g_enabled;
-    UpdateTrayIcon();
+    // Luan chuyen: OFF -> VIET -> DE -> OFF -> ...
     g_engine.ResetFull();
+    g_deEngine.ResetFull();
+    switch (g_mode) {
+        case MODE_OFF:  g_mode = MODE_VIET; break;
+        case MODE_VIET: g_mode = MODE_DE;   break;
+        case MODE_DE:   g_mode = MODE_OFF;  break;
+    }
+    UpdateTrayIcon();
     MessageBeep(MB_OK);
 }
 
@@ -149,11 +164,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
         case IDM_TOGGLE: Toggle(); break;
         case IDM_AUTOSTART: ToggleAutoStart(); break;
         case IDM_ABOUT:
-            MessageBoxW(hWnd, 
-                L"Cay \u2013 B\u1ed9 g\u00f5 ti\u1ebfng Vi\u1ec7t Telex v1.0.1\n\n"
-                L"Ctrl+Shift = B\u1eadt / T\u1eaft\n\n"
-                L"aa\u2192\u00e2  aw\u2192\u0103  dd\u2192\u0111  ee\u2192\u00ea  oo\u2192\u00f4  ow\u2192\u01a1  uw\u2192\u01b0\n"
-                L"s=s\u1eafc  f=huy\u1ec1n  r=h\u1ecfi  x=ng\u00e3  j=n\u1eb7ng\n\n"
+            MessageBoxW(hWnd,
+                L"Cay \u2013 B\u1ed9 g\u00f5 \u0111a ng\u00f4n ng\u1eef v1.0.1\n\n"
+                L"Ctrl+Shift = Chuy\u1ec3n: T\u1eaft -> Vi\u1ec7t -> \u0110\u1ee9c -> T\u1eaft\n\n"
+                L"[Ti\u1ebfng Vi\u1ec7t] aa\u2192\u00e2  aw\u2192\u0103  dd\u2192\u0111  ee\u2192\u00ea  oo\u2192\u00f4  ow\u2192\u01a1\n"
+                L"[Ti\u1ebfng \u0110\u1ee9c] aa\u2192\u00e4  uu\u2192\u00fc  oo\u2192\u00f6  ss\u2192\u00df  aaa\u2192aa\n\n"
                 L"Source: github.com/tctvn/cay\n"
                 L"License: GPL-3.0",
                 L"Gi\u1edbi thi\u1ec7u", MB_OK | MB_ICONINFORMATION);
@@ -211,13 +226,19 @@ void OnKeyDownHook(CayIME::InputHookManager* sender, CayIME::HookKeyEventArgs& e
         return;
     }
 
-    if (!g_enabled) return;
+    if (g_mode == MODE_OFF) return;
 
     Cay::KeyEvent ce;
     ce.keyCode = MapVKToKeyCode(e.keyCode);
     ce.character = e.character;
     ce.handled = false;
-    g_engine.OnKeyDown(ce);
+
+    if (g_mode == MODE_VIET) {
+        g_engine.OnKeyDown(ce);
+    } else if (g_mode == MODE_DE) {
+        g_deEngine.OnKeyDown(ce);
+    }
+
     if (ce.handled) e.handled = true;
 }
 
@@ -233,17 +254,18 @@ void OnKeyUpHook(CayIME::InputHookManager* sender, CayIME::HookKeyEventArgs& e) 
         g_pendingToggle = false; Toggle(); return;
     }
 
-    if (!g_enabled) return;
+    if (g_mode == MODE_OFF) return;
     Cay::KeyEvent ce;
     ce.keyCode = MapVKToKeyCode(e.keyCode);
     ce.character = e.character;
     ce.handled = false;
-    g_engine.OnKeyUp(ce);
+    if (g_mode == MODE_VIET) g_engine.OnKeyUp(ce);
     if (ce.handled) e.handled = true;
 }
 
 void OnMouseClickHook(CayIME::InputHookManager* sender) {
     g_engine.ResetFull();
+    g_deEngine.ResetFull();
 }
 
 int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLine, int nCmdShow) {
@@ -266,8 +288,9 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
 
     // Khởi tạo data (Đã xóa vì data là static)
-    g_iconOn = CreateTrayIcon(RGB(255, 0, 0));
-    g_iconOff = CreateTrayIcon(RGB(128, 128, 128));
+    g_iconViet = CreateTrayIcon(RGB(220, 30, 30),  L"V"); // Do - Viet
+    g_iconDe   = CreateTrayIcon(RGB(200, 160, 0),  L"D"); // Vang - Duc
+    g_iconOff  = CreateTrayIcon(RGB(110, 110, 110), L"-"); // Xam - Tat
 
     // Register Message-Only Window Class
     WNDCLASSEXW wcex = { 0 };
@@ -308,6 +331,7 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
     g_hookManager->KeyDown = OnKeyDownHook;
     g_hookManager->KeyUp = OnKeyUpHook;
     g_engine.OnInjectText = CayIME::InputInjector::ReplaceText;
+    g_deEngine.OnInjectText = CayIME::InputInjector::ReplaceText;
     g_hookManager->MouseClick = OnMouseClickHook;
 
     // Message Loop
@@ -321,12 +345,12 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
     delete g_hookManager;
     Shell_NotifyIconW(NIM_DELETE, &g_nid);
     DestroyWindow(g_hWnd);
-    DestroyIcon(g_iconOn);
+    DestroyIcon(g_iconViet);
+    DestroyIcon(g_iconDe);
     DestroyIcon(g_iconOff);
     ReleaseMutex(hMutex);
     CloseHandle(hMutex);
 
     return (int)msg.wParam;
 }
-
 
