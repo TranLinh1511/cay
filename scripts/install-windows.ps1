@@ -11,7 +11,7 @@ Write-Host "================================================" -ForegroundColor C
 Write-Host "   CayIME Windows Tu Dong Cai Dat           " -ForegroundColor Cyan
 Write-Host "================================================" -ForegroundColor Cyan
 
-$repo = "tctvn/cay"
+$repo = "TranLinh1511/cay"
 $assetName = "cay.exe"
 $downloadUrl = "https://github.com/$repo/releases/latest/download/$assetName"
 $installDir = "$env:LOCALAPPDATA\CayIME"
