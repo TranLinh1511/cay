@@ -51,6 +51,3 @@ Start-Process -FilePath $exePath
 Write-Host "`n================================================" -ForegroundColor Green
 Write-Host "   Cai dat Thanh Cong!                     " -ForegroundColor Green
 Write-Host "================================================" -ForegroundColor Green
-Write-Host "`nCayIME da duoc cai dat vao $installDir" 
-Write-Host "Noi dung se duoc chay tu dong khi dang nhap Windows." 
-Write-Host "Ban co the bat dau go tieng Viet ngay lap tuc!"
