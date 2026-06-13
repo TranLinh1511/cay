@@ -36,5 +36,11 @@ namespace Cay {
         while (*s1 && (*s1 == *s2)) { s1++; s2++; }
         return *s1 - *s2;
     }
+    
+    enum class InputMethod {
+        Telex = 0,
+        VNI = 1,
+        VIQR = 2,
+        VIQRStar = 3
+    };
 } // namespace Cay
-
