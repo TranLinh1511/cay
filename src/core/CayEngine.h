@@ -47,9 +47,6 @@ public:
 
     InjectTextFunc OnInjectText = nullptr;
 
-    bool autoRestoreEnabled = true;
-    InputMethod inputMethod = InputMethod::Telex;
-
 private:
     MyKey _buffer[MAX_BUFFER];
     int   _bufferCount;
