@@ -29,45 +29,68 @@ static wchar_t GetAcute(wchar_t ch) {
     }
 }
 
+// Tra ve family key (lowercase) de group cac ky tu cung loai umlaut
+// a/A -> 'a', u/U -> 'u', o/O -> 'o', s/S -> 's', khac -> 0
+static wchar_t GetFamily(wchar_t ch) {
+    switch (ch) {
+        case L'a': case L'A': return L'a';
+        case L'u': case L'U': return L'u';
+        case L'o': case L'O': return L'o';
+        case L's': case L'S': return L's';
+        default: return 0;
+    }
+}
+
 // Tra ve (special_char, trigger_count) cho tung ky tu
-// trigger=2: aa->ä, uu->ü, oo->ö
+// Output umlaut dua theo ky tu dau cua cum (giu case):
+//   aa/Aa/aA/AA -> ä/ä/ä/Ä, uu/Uu/uU/UU -> ü/ü/ü/Ü
+// trigger=2: aa->ä, uu->ü, oo->ö  (hoac mix case trong cung family)
 // trigger=3: sss->ß
 static void GetRule(wchar_t ch, wchar_t& special, int& trig) {
     switch (ch) {
-        case L'a': special = L'\u00E4'; trig = 2; return;
-        case L'A': special = L'\u00C4'; trig = 2; return;
-        case L'u': special = L'\u00FC'; trig = 2; return;
-        case L'U': special = L'\u00DC'; trig = 2; return;
-        case L'o': special = L'\u00F6'; trig = 2; return;
-        case L'O': special = L'\u00D6'; trig = 2; return;
-        case L's': special = L'\u00DF'; trig = 3; return;
-        case L'S': special = L'\u00DF'; trig = 3; return;
+        case L'a': special = L'\u00E4'; trig = 2; return; // ä
+        case L'A': special = L'\u00C4'; trig = 2; return; // Ä
+        case L'u': special = L'\u00FC'; trig = 2; return; // ü
+        case L'U': special = L'\u00DC'; trig = 2; return; // Ü
+        case L'o': special = L'\u00F6'; trig = 2; return; // ö
+        case L'O': special = L'\u00D6'; trig = 2; return; // Ö
+        case L's': special = L'\u00DF'; trig = 3; return; // ß
+        case L'S': special = L'\u00DF'; trig = 3; return; // ß
         default:   special = 0;         trig = 0; return;
     }
 }
 
 // Quy tac chung (ap dung cho ca umlaut va ß):
-//   run < trig          -> giu nguyen
-//   run chia het trig   -> run/trig ky tu dac biet
+//   run < trig          -> giu nguyen (tung ky tu goc)
+//   run chia het trig   -> run/trig ky tu dac biet (dua theo ky tu DAU cum)
 //   run le (mod != 0)   -> bo 1, giu run-1 ky tu goc
 //
-// Vi du umlaut (trig=2): a->a, aa->ä, aaa->aa, aaaa->ää
-// Vi du ß     (trig=3): s->s, ss->ss, sss->ß, ssss->sss, ssssss->ßß
+// Cum duoc group theo family (a/A cung nhom, u/U cung nhom, ...),
+// umlaut output dua theo ky tu dau tien cua cum.
+// Vi du: Uu -> ü (U dau -> Ü? Khong, Uu la mixed -> lay ky tu dau = U -> Ü)
+//        uU -> ü (u dau -> ü)
+//        UU -> Ü, uu -> ü
 void GermanEngine::BuildOutput(wchar_t* out, int& outLen) const {
     outLen = 0;
     int i = 0;
     while (i < _len) {
         wchar_t ch = _buf[i];
+        wchar_t fam = GetFamily(ch);
+
+        // Group theo family neu co, otherwise exact match
         int run = 1;
-        while (i + run < _len && _buf[i + run] == ch) run++;
-        i += run;
+        if (fam != 0) {
+            while (i + run < _len && GetFamily(_buf[i + run]) == fam) run++;
+        } else {
+            while (i + run < _len && _buf[i + run] == ch) run++;
+        }
 
         wchar_t sp; int trig;
-        GetRule(ch, sp, trig);
+        GetRule(ch, sp, trig); // dua theo ky tu DAU cum de lay output umlaut
 
         if (!sp || run < trig) {
             for (int r = 0; r < run && outLen < MAX_BUFFER - 1; r++)
-                out[outLen++] = ch;
+                out[outLen++] = _buf[i + r];
         } else if (run % trig == 0) {
             int count = run / trig;
             for (int r = 0; r < count && outLen < MAX_BUFFER - 1; r++)
@@ -75,8 +98,9 @@ void GermanEngine::BuildOutput(wchar_t* out, int& outLen) const {
         } else {
             // Le: bo 1, giu run-1 ky tu goc
             for (int r = 0; r < run - 1 && outLen < MAX_BUFFER - 1; r++)
-                out[outLen++] = ch;
+                out[outLen++] = _buf[i + r];
         }
+        i += run;
     }
     out[outLen] = L'\0';
 }
@@ -121,15 +145,31 @@ void GermanEngine::OnKeyDown(Cay::KeyEvent& e) {
         }
         if (_len > 0) {
             wchar_t last = _buf[_len - 1];
+            wchar_t fam = GetFamily(last);
             wchar_t sp; int trig;
             GetRule(last, sp, trig);
 
-            if (sp != 0) {
-                // Ky tu co rule umlaut/ß -> xoa toan bo cum giong nhau lien ke
-                // Vi du: buffer "aoo" -> xoa cum 'o' -> con "a"
-                //        buffer "oo"  -> xoa cum 'o' -> rong
-                //        buffer "sss" -> xoa cum 's' -> rong
-                while (_len > 0 && _buf[_len - 1] == last) {
+            if (sp != 0 && fam != 0) {
+                // Tinh do dai cum family o cuoi buffer
+                int runEnd = 0;
+                while (runEnd < _len && GetFamily(_buf[_len - 1 - runEnd]) == fam) runEnd++;
+
+                // Xac dinh output hien tai cua cum:
+                // - run % trig == 0: output la umlaut/ß (run/trig ky tu dac biet)
+                // - run % trig != 0: output la run-1 ky tu goc (le)
+                // - run < trig: output la run ky tu goc
+                //
+                // Backspace can xoa 1 ky tu OUTPUT:
+                // TH1: output la umlaut (run%trig==0 && run>=trig) -> xoa 'trig' raw chars
+                // TH2: output la ky tu goc -> xoa 1 raw char
+                if (runEnd >= trig && runEnd % trig == 0) {
+                    // Output cuoi la umlaut/ß -> xoa 'trig' raw chars de bo 1 umlaut
+                    for (int d = 0; d < trig && _len > 0; d++) {
+                        _len--;
+                        _buf[_len] = L'\0';
+                    }
+                } else {
+                    // Output van la ky tu goc -> xoa 1 raw char binh thuong
                     _len--;
                     _buf[_len] = L'\0';
                 }
