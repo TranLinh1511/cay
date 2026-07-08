@@ -95,6 +95,16 @@ void GermanEngine::BuildOutput(wchar_t* out, int& outLen) const {
             int count = run / trig;
             for (int r = 0; r < count && outLen < MAX_BUFFER - 1; r++)
                 out[outLen++] = sp;
+        } else if (trig == 3) {
+            // Rieng ß: run khong chia het cho 3 -> lay het cac nhom du (count = run/trig)
+            // thanh ß, phan du con lai (remainder) giu nguyen ky tu goc.
+            // Vi du: run=4 -> "ß" + "s" = "ßs"; run=5 -> "ß" + "ss" = "ßss"
+            int count = run / trig;
+            int rem = run % trig;
+            for (int r = 0; r < count && outLen < MAX_BUFFER - 1; r++)
+                out[outLen++] = sp;
+            for (int r = 0; r < rem && outLen < MAX_BUFFER - 1; r++)
+                out[outLen++] = _buf[i + run - rem + r];
         } else {
             // Le: bo 1, giu run-1 ky tu goc
             for (int r = 0; r < run - 1 && outLen < MAX_BUFFER - 1; r++)
